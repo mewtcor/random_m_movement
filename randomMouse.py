@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-from time import sleep
 import ctypes
 from ctypes import wintypes
-import msvcrt
 import random
-import threading
+import time
 
 import pyautogui
+
+INTERVAL = 20  # seconds between moves
+GLIDE = 0.5  # seconds the cursor takes to glide to its new spot
 
 
 def monitors():
@@ -27,34 +28,32 @@ def monitors():
     return rects
 
 
+class LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+
+def idle_seconds():
+    """Seconds since the last real mouse or keyboard input (our own moves don't count)."""
+    info = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO))
+    ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info))
+    return ((ctypes.windll.kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF) / 1000
+
+
 print("Monitors:", monitors())
-print("Press 's' in this terminal to stop.")
+print("Press Ctrl+C to stop.")
 
-stop_event = threading.Event()
-
-
-def listen_for_stop():
-    while not stop_event.is_set():
-        if msvcrt.kbhit():
-            key = msvcrt.getch()
-            if key in (b"s", b"S"):
-                stop_event.set()
-                print("\nStopping...")
-                break
-        sleep(0.1)
-
-
-threading.Thread(target=listen_for_stop, daemon=True).start()
-
-count = 0
-while count < 1000 and not stop_event.is_set():
-    left, top, right, bottom = random.choice(monitors())
-    x = random.randrange(left, right)
-    y = random.randrange(top, bottom)
-    pyautogui.moveTo(x, y)
-    print(f"Moved to x={x}, y={y}")
-    if stop_event.wait(20):
-        break
-    count += 1
+try:
+    for _ in range(1000):
+        time.sleep(INTERVAL)
+        if idle_seconds() < INTERVAL:
+            print("You're using the computer, skipping this move.")
+            continue
+        left, top, right, bottom = random.choice(monitors())
+        x = random.randrange(left, right)
+        y = random.randrange(top, bottom)
+        pyautogui.moveTo(x, y, duration=GLIDE)
+        print(f"Moved to x={x}, y={y}")
+except KeyboardInterrupt:
+    pass
 
 print("Script stopped.")
