@@ -33,7 +33,7 @@ class LASTINPUTINFO(ctypes.Structure):
 
 
 def idle_seconds():
-    """Seconds since the last real mouse or keyboard input (our own moves don't count)."""
+    """Seconds since the last mouse or keyboard input, including our own nudge."""
     info = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO))
     ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info))
     return ((ctypes.windll.kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF) / 1000
@@ -45,13 +45,17 @@ print("Press Ctrl+C to stop.")
 try:
     for _ in range(1000):
         time.sleep(INTERVAL)
-        if idle_seconds() < INTERVAL:
+        # Our own nudge lands just before the sleep, so allow 1s of slack for it.
+        if idle_seconds() < INTERVAL - 1:
             print("You're using the computer, skipping this move.")
             continue
         left, top, right, bottom = random.choice(monitors())
         x = random.randrange(left, right)
         y = random.randrange(top, bottom)
         pyautogui.moveTo(x, y, duration=GLIDE)
+        # The glide alone doesn't count as activity, so Teams would still go Away.
+        # A zero-distance mouse event does count, without moving the cursor.
+        ctypes.windll.user32.mouse_event(0x0001, 0, 0, 0, 0)  # MOUSEEVENTF_MOVE
         print(f"Moved to x={x}, y={y}")
 except KeyboardInterrupt:
     pass
